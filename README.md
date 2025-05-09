@@ -179,7 +179,7 @@ L'acteur `CronEntry` gère le cycle de vie d'une tâche planifiée, y compris so
 
 Le système de journalisation intégré permet de suivre l'exécution des tâches, avec la possibilité de désactiver la journalisation pour les tâches fréquentes ou peu importantes.
 
-_Ce document est une mise à jour de la documentation précédente._
+_Cette documentation a été mise à jour automatiquement._
 
 [1]: https://github.com/Xcraft-Inc/xcraft-core-goblin
 [2]: https://github.com/Xcraft-Inc/xcraft-core-stones
