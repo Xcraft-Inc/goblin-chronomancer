@@ -18,12 +18,14 @@ Ces acteurs sont implémentés selon le modèle Elf du framework Xcraft, avec un
 Le `Chronomancer` agit comme un orchestrateur central pour toutes les tâches planifiées. Lors de son initialisation, il charge toutes les entrées cron existantes depuis la base de données et les démarre. Chaque entrée cron est représentée par un acteur `CronEntry` qui encapsule les détails de la tâche planifiée, comme l'expression cron, la commande à exécuter et les données associées.
 
 Les tâches planifiées peuvent être définies avec :
+
 - Une expression cron standard (par exemple, `* * * * *` pour exécuter chaque minute)
 - Un timestamp Unix pour une exécution à un moment précis
 
 Lorsqu'une tâche est déclenchée selon sa planification, le `CronEntry` correspondant exécute la commande Xcraft spécifiée avec les données fournies. Le module gère également les erreurs d'exécution et peut fournir des informations sur l'état d'exécution des tâches.
 
 Le système prend en charge plusieurs opérations de gestion des tâches :
+
 - Création et mise à jour de tâches
 - Démarrage et arrêt de tâches
 - Suppression de tâches
@@ -116,7 +118,7 @@ const {Chronomancer} = require('goblin-chronomancer/lib/chronomancer.js');
 async listCron() {
   // Obtenir l'instance du Chronomancer
   const chronomancer = new Chronomancer(this);
-  
+
   // Obtenir toutes les tâches dont le nom commence par "backup-"
   const backupTasks = await chronomancer.getAllEntriesLike('backup-');
 }
@@ -126,8 +128,8 @@ async listCron() {
 
 Le module `goblin-chronomancer` interagit principalement avec :
 
-- **xcraft-core-goblin** : Utilise le modèle d'acteur Elf pour la gestion des tâches
-- **xcraft-core-stones** : Utilise les types pour définir la structure des données
+- [**xcraft-core-goblin**][1] : Utilise le modèle d'acteur Elf pour la gestion des tâches
+- [**xcraft-core-stones**][2] : Utilise les types pour définir la structure des données
 - **cron** : Bibliothèque sous-jacente pour la planification des tâches
 
 Le module peut exécuter n'importe quelle commande Xcraft, ce qui lui permet d'interagir indirectement avec tous les autres modules du système.
@@ -177,4 +179,7 @@ L'acteur `CronEntry` gère le cycle de vie d'une tâche planifiée, y compris so
 
 Le système de journalisation intégré permet de suivre l'exécution des tâches, avec la possibilité de désactiver la journalisation pour les tâches fréquentes ou peu importantes.
 
-*Ce document est une mise à jour de la documentation précédente.*
+_Ce document est une mise à jour de la documentation précédente._
+
+[1]: https://github.com/Xcraft-Inc/xcraft-core-goblin
+[2]: https://github.com/Xcraft-Inc/xcraft-core-stones
