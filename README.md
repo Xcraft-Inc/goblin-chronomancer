@@ -128,8 +128,8 @@ async listCron() {
 
 Le module `goblin-chronomancer` interagit principalement avec :
 
-- [**xcraft-core-goblin**][1] : Utilise le modèle d'acteur Elf pour la gestion des tâches
-- [**xcraft-core-stones**][2] : Utilise les types pour définir la structure des données
+- **[xcraft-core-goblin]** : Utilise le modèle d'acteur Elf pour la gestion des tâches
+- **[xcraft-core-stones]** : Utilise les types pour définir la structure des données
 - **cron** : Bibliothèque sous-jacente pour la planification des tâches
 
 Le module peut exécuter n'importe quelle commande Xcraft, ce qui lui permet d'interagir indirectement avec tous les autres modules du système.
@@ -181,5 +181,5 @@ Le système de journalisation intégré permet de suivre l'exécution des tâche
 
 _Cette documentation a été mise à jour automatiquement._
 
-[1]: https://github.com/Xcraft-Inc/xcraft-core-goblin
-[2]: https://github.com/Xcraft-Inc/xcraft-core-stones
+[xcraft-core-goblin]: https://github.com/Xcraft-Inc/xcraft-core-goblin
+[xcraft-core-stones]: https://github.com/Xcraft-Inc/xcraft-core-stones
