@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "cron": "^3.1.6",
-    "xcraft-core-goblin": "^5.12.1",
+    "xcraft-core-goblin": "^5.42.0",
     "xcraft-core-utils": "^4.7.0"
   },
   "devDependencies": {
