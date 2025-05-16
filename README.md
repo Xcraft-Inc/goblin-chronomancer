@@ -142,6 +142,18 @@ Ce fichier exporte l'acteur singleton `Chronomancer` qui sert de point d'entrée
 
 L'acteur `Chronomancer` est implémenté comme un `Elf.Alone`, ce qui signifie qu'il s'agit d'un singleton dans le système. Il gère un ensemble d'acteurs `CronEntry` qui représentent les tâches individuelles.
 
+#### Méthodes publiques
+
+- **`init()`** - Initialise le Chronomancer en chargeant toutes les entrées cron existantes depuis la base de données et en les démarrant.
+- **`upsert(name, cronTime, command, payload, loggingMode)`** - Crée ou met à jour une entrée cron avec les paramètres spécifiés.
+- **`remove(name)`** - Supprime une entrée cron spécifique.
+- **`start(name)`** - Démarre une entrée cron spécifique.
+- **`stop(name)`** - Arrête une entrée cron spécifique.
+- **`restart(name, asap)`** - Redémarre une entrée cron, avec la possibilité de l'exécuter immédiatement si `asap` est `true`.
+- **`running(name)`** - Vérifie si une entrée cron est en cours d'exécution.
+- **`nextDates(name, count)`** - Obtient les prochaines dates d'exécution d'une entrée cron.
+- **`getAllEntriesLike(name)`** - Recherche toutes les entrées cron dont l'ID correspond au motif spécifié.
+
 ### `cronEntry.js`
 
 Ce fichier définit l'acteur `CronEntry` qui représente une tâche planifiée individuelle. Chaque entrée cron contient :
@@ -153,6 +165,44 @@ Ce fichier définit l'acteur `CronEntry` qui représente une tâche planifiée i
 - Un mode de journalisation
 
 L'acteur `CronEntry` est implémenté comme un `Elf.Archetype`, ce qui signifie que son état est persisté dans la base de données. Il utilise la bibliothèque `cron` pour planifier l'exécution des tâches.
+
+#### État et modèle de données
+
+La structure de l'état d'une entrée cron est définie par `CronEntryShape` :
+
+```javascript
+class CronEntryShape {
+  id = string;
+  meta = MetaShape;
+  time = union(string, number); /* cron time string or a unix timestamp */
+  command = string;
+  payload = object;
+  loggingMode = enumeration('enabled', 'disabled');
+}
+```
+
+Où `MetaShape` est défini comme :
+
+```javascript
+class MetaShape {
+  status = enumeration('published', 'trashed');
+}
+```
+
+#### Méthodes publiques
+
+- **`create(id, desktopId)`** - Crée une nouvelle entrée cron avec l'ID spécifié.
+- **`upsert(time, command, payload, loggingMode)`** - Met à jour les paramètres de l'entrée cron.
+- **`start()`** - Démarre l'exécution planifiée de l'entrée cron.
+- **`stop()`** - Arrête l'exécution planifiée de l'entrée cron.
+- **`fire()`** - Déclenche immédiatement l'exécution de l'entrée cron.
+- **`revive()`** - Restaure une entrée cron précédemment supprimée.
+- **`trash()`** - Marque l'entrée cron comme supprimée.
+- **`running()`** - Vérifie si l'entrée cron est en cours d'exécution.
+- **`nextDates(count)`** - Obtient les prochaines dates d'exécution de l'entrée cron.
+- **`error()`** - Récupère la dernière erreur survenue lors de l'exécution de l'entrée cron.
+- **`delete()`** - Supprime l'entrée cron.
+- **`dispose()`** - Libère les ressources utilisées par l'entrée cron.
 
 ### `lib/chronomancer.js`
 
