@@ -4,6 +4,14 @@
 
 Le module `goblin-chronomancer` est un gestionnaire de tâches planifiées (cron jobs) pour l'écosystème Xcraft. Il permet de créer, gérer et exécuter des tâches récurrentes selon des expressions cron ou des timestamps spécifiques. Ce module fournit une abstraction élégante pour la planification de commandes Xcraft à exécuter à des moments précis.
 
+## Sommaire
+
+- [Structure du module](#structure-du-module)
+- [Fonctionnement global](#fonctionnement-global)
+- [Exemples d'utilisation](#exemples-dutilisation)
+- [Interactions avec d'autres modules](#interactions-avec-dautres-modules)
+- [Détails des sources](#détails-des-sources)
+
 ## Structure du module
 
 Le module est composé de deux acteurs principaux :
@@ -48,7 +56,7 @@ async createBackupTask() {
     'daily-backup',
     '0 2 * * *',
     'backup.create',
-    { 
+    {
       type: 'full',
       destination: '/backup/daily'
     },
@@ -66,7 +74,7 @@ async scheduleMaintenanceWindow() {
 
   // Maintenance programmée le 1er janvier 2025 à minuit
   const maintenanceDate = new Date('2025-01-01T00:00:00Z').getTime();
-  
+
   await chronomancer.upsert(
     'maintenance-2025',
     maintenanceDate,
@@ -85,7 +93,7 @@ async manageCronTasks() {
 
   // Vérifier l'état d'une tâche
   const isRunning = await chronomancer.running('daily-backup');
-  
+
   if (!isRunning) {
     // Redémarrer avec exécution immédiate
     await chronomancer.restart('daily-backup', true);
@@ -165,11 +173,11 @@ La structure de l'état d'une entrée cron est définie par `CronEntryShape` :
 
 ```javascript
 class CronEntryShape {
-  id = string;                                    // Identifiant unique
-  meta = MetaShape;                              // Métadonnées (status: 'published'|'trashed')
-  time = union(string, number);                  // Expression cron ou timestamp Unix
-  command = string;                              // Commande Xcraft à exécuter
-  payload = object;                              // Paramètres pour la commande
+  id = string; // Identifiant unique
+  meta = MetaShape; // Métadonnées (status: 'published'|'trashed')
+  time = union(string, number); // Expression cron ou timestamp Unix
+  command = string; // Commande Xcraft à exécuter
+  payload = object; // Paramètres pour la commande
   loggingMode = enumeration('enabled', 'disabled'); // Mode de journalisation
 }
 ```
