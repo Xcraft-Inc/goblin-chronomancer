@@ -147,23 +147,15 @@ class ChronomancerShape {
 
 #### Méthodes publiques
 
-**`init()`** - Initialise le Chronomancer en chargeant et démarrant toutes les entrées cron existantes depuis la base de données.
-
-**`upsert(name, cronTime, command, payload, loggingMode='enabled')`** - Crée ou met à jour une entrée cron. Le paramètre `cronTime` peut être une expression cron (string) ou un timestamp Unix (number).
-
-**`remove(name)`** - Supprime définitivement une entrée cron en la marquant comme "trashed".
-
-**`start(name)`** - Démarre l'exécution planifiée d'une entrée cron spécifique.
-
-**`stop(name)`** - Arrête temporairement l'exécution d'une entrée cron.
-
-**`restart(name, asap=false)`** - Redémarre une entrée cron. Si `asap` est `true`, déclenche une exécution immédiate.
-
-**`running(name)`** - Retourne `true` si l'entrée cron est actuellement en cours d'exécution.
-
-**`nextDates(name, count=1)`** - Retourne un tableau des prochaines dates d'exécution planifiées.
-
-**`getAllEntriesLike(name)`** - Recherche toutes les entrées cron dont l'ID commence par le motif spécifié.
+- **`init()`** — Initialise le Chronomancer en chargeant et démarrant toutes les entrées cron existantes depuis la base de données.
+- **`upsert(name, cronTime, command, payload, loggingMode='enabled')`** — Crée ou met à jour une entrée cron. Le paramètre `cronTime` peut être une expression cron (string) ou un timestamp Unix (number).
+- **`remove(name)`** — Supprime définitivement une entrée cron en la marquant comme "trashed".
+- **`start(name)`** — Démarre l'exécution planifiée d'une entrée cron spécifique.
+- **`stop(name)`** — Arrête temporairement l'exécution d'une entrée cron.
+- **`restart(name, asap=false)`** — Redémarre une entrée cron. Si `asap` est `true`, déclenche une exécution immédiate.
+- **`running(name)`** — Retourne `true` si l'entrée cron est actuellement en cours d'exécution.
+- **`nextDates(name, count=1)`** — Retourne un tableau des prochaines dates d'exécution planifiées.
+- **`getAllEntriesLike(name)`** — Recherche toutes les entrées cron dont l'ID commence par le motif spécifié.
 
 ### `lib/cronEntry.js`
 
@@ -182,37 +174,34 @@ class CronEntryShape {
 }
 ```
 
+La classe `MetaShape` définit les métadonnées de l'entrée :
+
+```javascript
+class MetaShape {
+  status = enumeration('published', 'trashed'); // État de publication
+}
+```
+
 #### Méthodes publiques
 
-**`create(id, desktopId)`** - Crée une nouvelle entrée cron avec l'ID spécifié et la persiste en base.
-
-**`upsert(time, command, payload, loggingMode='enabled')`** - Met à jour les paramètres de planification et de commande de l'entrée cron.
-
-**`start()`** - Démarre la planification en créant un `CronJob`. Gère la réutilisation des jobs existants si les paramètres n'ont pas changé.
-
-**`stop()`** - Arrête l'exécution planifiée sans supprimer l'entrée.
-
-**`fire()`** - Déclenche immédiatement l'exécution de la tâche via `fireOnTick()`.
-
-**`revive()`** - Restaure une entrée précédemment marquée comme "trashed".
-
-**`trash()`** - Marque l'entrée comme supprimée et arrête son exécution.
-
-**`running()`** - Retourne l'état d'exécution du job cron sous-jacent.
-
-**`nextDates(count=1)`** - Utilise la méthode `nextDates()` du `CronJob` pour prédire les prochaines exécutions.
-
-**`error()`** - Retourne la dernière erreur capturée lors de l'exécution.
-
-**`delete()`** - Méthode de cycle de vie qui arrête le job lors de la suppression de l'acteur.
-
-**`dispose()`** - Méthode de nettoyage qui arrête le job lors de la fermeture de l'application.
+- **`create(id, desktopId)`** — Crée une nouvelle entrée cron avec l'ID spécifié et la persiste en base.
+- **`upsert(time, command, payload, loggingMode='enabled')`** — Met à jour les paramètres de planification et de commande de l'entrée cron.
+- **`start()`** — Démarre la planification en créant un `CronJob`. Gère la réutilisation des jobs existants si les paramètres n'ont pas changé.
+- **`stop()`** — Arrête l'exécution planifiée sans supprimer l'entrée.
+- **`fire()`** — Déclenche immédiatement l'exécution de la tâche via `fireOnTick()`.
+- **`revive()`** — Restaure une entrée précédemment marquée comme "trashed".
+- **`trash()`** — Marque l'entrée comme supprimée et arrête son exécution.
+- **`running()`** — Retourne l'état d'exécution du job cron sous-jacent.
+- **`nextDates(count=1)`** — Utilise la méthode `nextDates()` du `CronJob` pour prédire les prochaines exécutions.
+- **`error()`** — Retourne la dernière erreur capturée lors de l'exécution.
+- **`delete()`** — Méthode de cycle de vie qui arrête le job lors de la suppression de l'acteur.
+- **`dispose()`** — Méthode de nettoyage qui arrête le job lors de la fermeture de l'application.
 
 #### Mécanisme d'exécution privé
 
 La méthode privée `_job()` gère l'exécution effective des tâches :
 
-- Prévention des exécutions concurrentes
+- Prévention des exécutions concurrentes avec le flag `_running`
 - Mesure du temps d'exécution avec `hrtime.bigint()`
 - Journalisation conditionnelle selon `loggingMode`
 - Capture et logging des erreurs via `this.quest.logCommandError()`
@@ -220,6 +209,10 @@ La méthode privée `_job()` gère l'exécution effective des tâches :
 #### Gestion de la persistance
 
 L'acteur utilise la base de données `chronomancer` (définie dans `CronEntryLogic.db`) pour persister son état. Les opérations de création, mise à jour et suppression sont automatiquement sauvegardées via `await this.persist()`.
+
+#### Gestion des erreurs et warnings
+
+Le module gère spécifiquement les warnings de la bibliothèque `cron` en les loggant comme des avertissements plutôt que des erreurs, permettant une meilleure distinction entre les problèmes critiques et les alertes informatives.
 
 _Cette documentation a été mise à jour automatiquement._
 
