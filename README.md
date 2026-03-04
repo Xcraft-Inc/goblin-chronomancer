@@ -1,8 +1,8 @@
-# 📘 Documentation du module goblin-chronomancer
+# 📘 goblin-chronomancer
 
 ## Aperçu
 
-Le module `goblin-chronomancer` est un gestionnaire de tâches planifiées (cron jobs) pour l'écosystème Xcraft. Il permet de créer, gérer et exécuter des tâches récurrentes selon des expressions cron ou des timestamps spécifiques. Ce module fournit une abstraction élégante pour la planification de commandes Xcraft à exécuter à des moments précis.
+Le module `goblin-chronomancer` est un gestionnaire de tâches planifiées (cron jobs) pour l'écosystème Xcraft. Il permet de créer, gérer et exécuter des tâches récurrentes selon des expressions cron ou des timestamps Unix spécifiques. Ce module fournit une abstraction pour la planification de commandes Xcraft à exécuter à des moments précis, avec persistance des entrées en base de données.
 
 ## Sommaire
 
@@ -11,36 +11,47 @@ Le module `goblin-chronomancer` est un gestionnaire de tâches planifiées (cron
 - [Exemples d'utilisation](#exemples-dutilisation)
 - [Interactions avec d'autres modules](#interactions-avec-dautres-modules)
 - [Détails des sources](#détails-des-sources)
+- [Licence](#licence)
 
 ## Structure du module
 
 Le module est composé de deux acteurs principaux :
 
-1. **Chronomancer** - Un acteur singleton (`Elf.Alone`) qui gère l'ensemble des entrées cron
-2. **CronEntry** - Un acteur persisté (`Elf.Archetype`) qui représente une tâche planifiée individuelle
+1. **Chronomancer** — Un acteur singleton (`Elf.Alone`) qui orchestre l'ensemble des entrées cron. Il est le point d'entrée pour la création, la gestion et la supervision des tâches planifiées.
+2. **CronEntry** — Un acteur persisté (`Elf.Archetype`) qui représente une tâche planifiée individuelle. Chaque entrée encapsule sa propre instance de `CronJob` (bibliothèque `cron`).
 
-Ces acteurs sont implémentés selon le modèle Elf du framework Xcraft, avec une séparation claire entre la logique métier (`Logic`) et l'état (`State`).
+Ces acteurs suivent le modèle Elf du framework Xcraft avec une séparation claire entre la logique métier (`Logic`) et l'état (`State`).
 
 ## Fonctionnement global
 
-Le `Chronomancer` agit comme un orchestrateur central pour toutes les tâches planifiées. Lors de son initialisation, il charge toutes les entrées cron existantes depuis la base de données `chronomancer` et les démarre automatiquement. Chaque entrée cron est représentée par un acteur `CronEntry` qui encapsule les détails de la tâche planifiée.
+Le `Chronomancer` agit comme un orchestrateur central pour toutes les tâches planifiées. Lors de son initialisation (`init`), il interroge la base de données `chronomancer` pour charger toutes les entrées cron existantes et les démarre automatiquement.
 
 ### Cycle de vie des tâches
 
-1. **Création** : Une tâche est créée via `upsert()` avec ses paramètres de planification
-2. **Démarrage** : La tâche est démarrée et planifiée selon son expression cron
-3. **Exécution** : À chaque déclenchement, la commande Xcraft spécifiée est exécutée
-4. **Gestion des erreurs** : Les erreurs sont capturées et journalisées
-5. **Arrêt/Suppression** : La tâche peut être arrêtée temporairement ou supprimée définitivement
+1. **Création/mise à jour** : Une tâche est créée ou mise à jour via `upsert()` avec ses paramètres de planification.
+2. **Démarrage** : L'entrée cron crée un `CronJob` et commence à planifier les exécutions.
+3. **Exécution** : À chaque déclenchement, la commande Xcraft spécifiée est exécutée via `this.quest.cmd()`.
+4. **Gestion des erreurs** : Les erreurs sont capturées, loggées et accessibles via `error()`.
+5. **Arrêt/Suppression** : Une tâche peut être arrêtée temporairement (`stop`) ou supprimée définitivement (`trash`).
 
 ### Mécanisme d'exécution
 
-Chaque `CronEntry` utilise la bibliothèque `cron` pour gérer la planification. Lors de l'exécution :
+La méthode privée `_job()` gère l'exécution effective :
 
-- Vérification qu'aucune instance de la tâche n'est déjà en cours
-- Exécution de la commande Xcraft avec les paramètres fournis
-- Journalisation du début, de la fin et de la durée d'exécution
-- Gestion des erreurs avec capture et logging
+- **Prévention des exécutions concurrentes** : le flag `_running` empêche qu'une même tâche soit lancée deux fois simultanément.
+- **Mesure du temps d'exécution** : via `hrtime.bigint()` avec précision à la milliseconde.
+- **Journalisation conditionnelle** : activée ou désactivée selon `loggingMode`.
+- **Capture des erreurs** : via `this.quest.logCommandError()`, l'erreur est également stockée localement.
+
+```
+Chronomancer.init()
+  └─> CronEntryLogic.db (cryo reader)
+        └─> pour chaque cronEntry persistée
+              └─> new CronEntry(this).create(id, desktopId)
+                    └─> cronEntry.start()
+                          └─> new CronJob(time, _job, ...)
+                                └─> _job() → this.quest.cmd(command, payload)
+```
 
 ## Exemples d'utilisation
 
@@ -56,23 +67,18 @@ async createBackupTask() {
     'daily-backup',
     '0 2 * * *',
     'backup.create',
-    {
-      type: 'full',
-      destination: '/backup/daily'
-    },
+    { type: 'full', destination: '/backup/daily' },
     'enabled'
   );
 }
 ```
 
-### Planification d'une tâche à un moment précis
+### Planification d'une tâche à un moment précis (timestamp Unix)
 
 ```javascript
-// Dans une méthode d'un acteur Elf
 async scheduleMaintenanceWindow() {
   const chronomancer = new Chronomancer(this);
 
-  // Maintenance programmée le 1er janvier 2025 à minuit
   const maintenanceDate = new Date('2025-01-01T00:00:00Z').getTime();
 
   await chronomancer.upsert(
@@ -87,7 +93,6 @@ async scheduleMaintenanceWindow() {
 ### Gestion dynamique des tâches
 
 ```javascript
-// Dans une méthode d'un acteur Elf
 async manageCronTasks() {
   const chronomancer = new Chronomancer(this);
 
@@ -99,45 +104,49 @@ async manageCronTasks() {
     await chronomancer.restart('daily-backup', true);
   }
 
-  // Obtenir les 5 prochaines exécutions
+  // Obtenir les 5 prochaines exécutions planifiées
   const nextRuns = await chronomancer.nextDates('daily-backup', 5);
-  console.log('Prochaines exécutions:', nextRuns);
 
-  // Lister toutes les tâches de backup
-  const backupTasks = await chronomancer.getAllEntriesLike('backup-');
+  // Lister toutes les tâches dont le nom commence par 'backup'
+  const backupTasks = await chronomancer.getAllEntriesLike('backup');
+}
+```
+
+### Suppression d'une tâche
+
+```javascript
+async removeObsoleteTask() {
+  const chronomancer = new Chronomancer(this);
+  await chronomancer.remove('maintenance-2025');
 }
 ```
 
 ## Interactions avec d'autres modules
 
-Le module `goblin-chronomancer` interagit avec :
+- **[xcraft-core-goblin]** — Fournit les abstractions `Elf`, `Elf.Alone`, `Elf.Archetype`, `Elf.Spirit` et `SmartId` utilisées pour définir les acteurs.
+- **[xcraft-core-stones]** — Fournit les types (`string`, `object`, `enumeration`, `union`, `number`) pour définir la structure des shapes d'état.
+- **[xcraft-core-utils]** — Utilitaires généraux du framework Xcraft.
+- **cron** — Bibliothèque externe (`^3.1.6`) qui fournit `CronJob` et `sendAt` pour la planification et la vérification des dates.
 
-- **[xcraft-core-goblin]** : Utilise le modèle d'acteur Elf pour la gestion des tâches
-- **[xcraft-core-stones]** : Utilise les types pour définir la structure des données
-- **[xcraft-core-utils]** : Utilitaires du framework Xcraft
-- **cron** : Bibliothèque externe pour la planification des tâches
-
-Le module peut exécuter n'importe quelle commande Xcraft via `this.quest.cmd()`, lui permettant d'interagir avec tous les autres modules du système.
-
-### Variables d'environnement
-
-Aucune variable d'environnement spécifique n'est utilisée par ce module.
+Le module peut exécuter n'importe quelle commande Xcraft via `this.quest.cmd()`, lui permettant d'interagir avec l'ensemble des modules du système.
 
 ## Détails des sources
 
 ### `chronomancer.js`
 
-Point d'entrée principal qui exporte les commandes Xcraft pour l'acteur `Chronomancer` via `Elf.birth()`.
+Point d'entrée racine qui exporte les commandes Xcraft pour l'acteur `Chronomancer` via `Elf.birth(Chronomancer, ChronomancerLogic)`.
 
 ### `cronEntry.js`
 
-Point d'entrée pour l'acteur `CronEntry` qui exporte ses commandes Xcraft via `Elf.birth()`.
+Point d'entrée racine pour l'acteur `CronEntry`, exporte ses commandes Xcraft via `Elf.birth(CronEntry, CronEntryLogic)`.
 
 ### `lib/chronomancer.js`
 
+Implémente le singleton `Chronomancer` (`Elf.Alone`) et sa logique `ChronomancerLogic` (`Elf.Spirit`).
+
 #### État et modèle de données
 
-L'acteur `Chronomancer` a un état minimal défini par `ChronomancerShape` :
+L'état du `Chronomancer` est minimal, défini par `ChronomancerShape` :
 
 ```javascript
 class ChronomancerShape {
@@ -145,76 +154,74 @@ class ChronomancerShape {
 }
 ```
 
+Le `_desktopId` interne est fixé à `'system@chronomancer'` et utilisé pour toutes les instanciations de `CronEntry`.
+
 #### Méthodes publiques
 
-- **`init()`** — Initialise le Chronomancer en chargeant et démarrant toutes les entrées cron existantes depuis la base de données.
-- **`upsert(name, cronTime, command, payload, loggingMode='enabled')`** — Crée ou met à jour une entrée cron. Le paramètre `cronTime` peut être une expression cron (string) ou un timestamp Unix (number).
-- **`remove(name)`** — Supprime définitivement une entrée cron en la marquant comme "trashed".
-- **`start(name)`** — Démarre l'exécution planifiée d'une entrée cron spécifique.
-- **`stop(name)`** — Arrête temporairement l'exécution d'une entrée cron.
-- **`restart(name, asap=false)`** — Redémarre une entrée cron. Si `asap` est `true`, déclenche une exécution immédiate.
-- **`running(name)`** — Retourne `true` si l'entrée cron est actuellement en cours d'exécution.
+- **`init()`** — Quête d'initialisation du singleton. Charge toutes les entrées cron persistées depuis la base `chronomancer` et démarre chacune d'elles.
+- **`upsert(name, cronTime, command, payload, loggingMode='enabled')`** — Crée ou met à jour une entrée cron identifiée par `name`. `cronTime` peut être une expression cron (string, ex. `'0 2 * * *'`) ou un timestamp Unix en millisecondes (number).
+- **`remove(name)`** — Supprime définitivement une entrée cron (la marque `trashed`). Sans effet si l'entrée n'existe pas.
+- **`start(name)`** — Démarre la planification d'une entrée cron spécifique.
+- **`stop(name)`** — Arrête temporairement l'exécution d'une entrée cron sans la supprimer.
+- **`restart(name, asap=false)`** — Arrête puis redémarre une entrée cron. Si `asap` est `true`, déclenche une exécution immédiate via `fire()`.
+- **`running(name)`** — Retourne `true` si le `CronJob` sous-jacent est actuellement actif.
 - **`nextDates(name, count=1)`** — Retourne un tableau des prochaines dates d'exécution planifiées.
-- **`getAllEntriesLike(name)`** — Recherche toutes les entrées cron dont l'ID commence par le motif spécifié.
+- **`getAllEntriesLike(name)`** — Recherche en base toutes les entrées cron dont l'ID commence par le motif dérivé de `name`. Retourne les champs `id`, `time`, `command` et `payload`.
 
 ### `lib/cronEntry.js`
 
+Implémente l'acteur persisté `CronEntry` (`Elf.Archetype`) et sa logique `CronEntryLogic`.
+
 #### État et modèle de données
 
-La structure de l'état d'une entrée cron est définie par `CronEntryShape` :
+La structure complète est définie par `CronEntryShape` :
 
 ```javascript
 class CronEntryShape {
-  id = string; // Identifiant unique
-  meta = MetaShape; // Métadonnées (status: 'published'|'trashed')
-  time = union(string, number); // Expression cron ou timestamp Unix
+  id = string; // Identifiant unique (ex: cronEntry@<hash>)
+  meta = MetaShape; // Métadonnées de cycle de vie
+  time = union(string, number); // Expression cron ou timestamp Unix (ms)
   command = string; // Commande Xcraft à exécuter
-  payload = object; // Paramètres pour la commande
+  payload = object; // Paramètres transmis à la commande
   loggingMode = enumeration('enabled', 'disabled'); // Mode de journalisation
 }
-```
 
-La classe `MetaShape` définit les métadonnées de l'entrée :
-
-```javascript
 class MetaShape {
-  status = enumeration('published', 'trashed'); // État de publication
+  status = enumeration('published', 'trashed'); // État de l'entrée
 }
 ```
+
+L'état initial dans `CronEntryLogic` définit le statut `'published'` et `loggingMode` à `'enabled'` par défaut.
+
+La base de données utilisée pour la persistance est définie par `CronEntryLogic.db = 'chronomancer'`.
 
 #### Méthodes publiques
 
-- **`create(id, desktopId)`** — Crée une nouvelle entrée cron avec l'ID spécifié et la persiste en base.
-- **`upsert(time, command, payload, loggingMode='enabled')`** — Met à jour les paramètres de planification et de commande de l'entrée cron.
-- **`start()`** — Démarre la planification en créant un `CronJob`. Gère la réutilisation des jobs existants si les paramètres n'ont pas changé.
-- **`stop()`** — Arrête l'exécution planifiée sans supprimer l'entrée.
-- **`fire()`** — Déclenche immédiatement l'exécution de la tâche via `fireOnTick()`.
-- **`revive()`** — Restaure une entrée précédemment marquée comme "trashed".
-- **`trash()`** — Marque l'entrée comme supprimée et arrête son exécution.
-- **`running()`** — Retourne l'état d'exécution du job cron sous-jacent.
-- **`nextDates(count=1)`** — Utilise la méthode `nextDates()` du `CronJob` pour prédire les prochaines exécutions.
-- **`error()`** — Retourne la dernière erreur capturée lors de l'exécution.
-- **`delete()`** — Méthode de cycle de vie qui arrête le job lors de la suppression de l'acteur.
-- **`dispose()`** — Méthode de nettoyage qui arrête le job lors de la fermeture de l'application.
+- **`create(id, desktopId)`** — Crée et persiste une nouvelle entrée cron. Retourne `this` pour permettre le chaînage.
+- **`upsert(time, command, payload, loggingMode='enabled')`** — Met à jour les paramètres de planification et persiste les changements. Remet le statut à `'published'`.
+- **`start()`** — Démarre la planification. Réutilise le `CronJob` existant si le temps n'a pas changé ; en crée un nouveau sinon. Convertit les timestamps Unix en objets `Date`.
+- **`stop()`** — Arrête le `CronJob` sans modifier la persistance.
+- **`fire()`** — Déclenche immédiatement l'exécution via `fireOnTick()`, indépendamment du planning.
+- **`revive()`** — Restaure le statut `'published'` d'une entrée préalablement `trashed` et persiste.
+- **`trash()`** — Arrête le job, marque l'entrée `'trashed'`, persiste et nettoie les références internes.
+- **`running()`** — Retourne l'état d'exécution (`CronJob.running`) ou `false` si aucun job n'est actif.
+- **`nextDates(count=1)`** — Délègue à `CronJob.nextDates()` pour prédire les prochaines exécutions. Retourne `[]` si aucun job n'est actif.
+- **`inPast()`** — Vérifie si la date/heure planifiée est dans le passé en utilisant `sendAt()`. Retourne `true` si c'est le cas.
+- **`error()`** — Retourne la dernière erreur capturée lors de l'exécution, ou `null`.
+- **`delete()`** — Méthode de cycle de vie appelée lors de la suppression de l'acteur : arrête le job.
+- **`dispose()`** — Méthode de nettoyage appelée lors de la fermeture de l'application : arrête le job.
 
-#### Mécanisme d'exécution privé
+#### Gestion des warnings cron
 
-La méthode privée `_job()` gère l'exécution effective des tâches :
+Lors de la création d'un `CronJob`, les messages commençant par `'WARNING'` (ex. date dans le passé) sont traités comme de simples avertissements (`log.warn`) plutôt que comme des erreurs fatales, permettant une distinction claire entre alertes informatives et problèmes critiques.
 
-- Prévention des exécutions concurrentes avec le flag `_running`
-- Mesure du temps d'exécution avec `hrtime.bigint()`
-- Journalisation conditionnelle selon `loggingMode`
-- Capture et logging des erreurs via `this.quest.logCommandError()`
+## Licence
 
-#### Gestion de la persistance
+Ce module est distribué sous [licence MIT](./LICENSE).
 
-L'acteur utilise la base de données `chronomancer` (définie dans `CronEntryLogic.db`) pour persister son état. Les opérations de création, mise à jour et suppression sont automatiquement sauvegardées via `await this.persist()`.
+---
 
-#### Gestion des erreurs et warnings
-
-Le module gère spécifiquement les warnings de la bibliothèque `cron` en les loggant comme des avertissements plutôt que des erreurs, permettant une meilleure distinction entre les problèmes critiques et les alertes informatives.
-
-_Cette documentation a été mise à jour automatiquement._
+_Ce contenu a été généré par IA_
 
 [xcraft-core-goblin]: https://github.com/Xcraft-Inc/xcraft-core-goblin
 [xcraft-core-stones]: https://github.com/Xcraft-Inc/xcraft-core-stones
